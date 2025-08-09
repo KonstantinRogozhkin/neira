@@ -8,8 +8,8 @@ cd "$( dirname "${BASH_SOURCE[0]}" )"
 
 # Ensure required variables are present
 if [[ -z "${RELEASE_VERSION}" ]]; then
-  if [[ -f "../../dev/build.env" ]]; then
-    . ../../dev/build.env
+  if [[ -f "../../../dev/build.env" ]]; then
+    . ../../../dev/build.env
   fi
 fi
 
