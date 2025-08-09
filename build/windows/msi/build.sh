@@ -6,6 +6,17 @@ CALLER_DIR=$( pwd )
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
 
+# Ensure required variables are present
+if [[ -z "${RELEASE_VERSION}" ]]; then
+  if [[ -f "../../dev/build.env" ]]; then
+    . ../../dev/build.env
+  fi
+fi
+
+if [[ -z "${VSCODE_ARCH}" ]]; then
+  VSCODE_ARCH="x64"
+fi
+
 WIN_SDK_MAJOR_VERSION="10"
 WIN_SDK_FULL_VERSION="10.0.17763.0"
 
