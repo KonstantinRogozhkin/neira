@@ -39,6 +39,21 @@ if [[ "${SHOULD_BUILD}" == "yes" ]]; then
         SHOULD_BUILD_REH_WEB="no"
       fi
       . ../build_cli.sh
+      # Вшиваем иконку Neira в скомпонованный exe (после упаковки)
+      if command -v rcedit >/dev/null 2>&1; then
+        RCEDIT_BIN="rcedit"
+      elif [[ -x "/c/ProgramData/chocolatey/bin/rcedit.exe" ]]; then
+        RCEDIT_BIN="/c/ProgramData/chocolatey/bin/rcedit.exe"
+      else
+        RCEDIT_BIN=""
+      fi
+      if [[ -n "${RCEDIT_BIN}" ]]; then
+        EXE_PATH="../VSCode-win32-${VSCODE_ARCH}/Neira.exe"
+        ICO_PATH="../src/stable/resources/win32/code.ico"
+        if [[ -f "${EXE_PATH}" && -f "${ICO_PATH}" ]]; then
+          "${RCEDIT_BIN}" "${EXE_PATH}" --set-icon "${ICO_PATH}" || true
+        fi
+      fi
     fi
     VSCODE_PLATFORM="win32"
   else
