@@ -62,7 +62,9 @@ fi
 sed -i "s|@@PRODUCT_UPGRADE_CODE@@|${PRODUCT_UPGRADE_CODE}|g" .\\includes\\vscodium-variables.wxi
 sed -i "s|@@PRODUCT_NAME@@|${PRODUCT_NAME}|g" .\\vscodium.xsl
 
-find i18n -name '*.wxl' -print0 | xargs -0 sed -i "s|@@PRODUCT_NAME@@|${PRODUCT_NAME}|g"
+# Update ProductName and any 'VSCodium' labels in localization files to PRODUCT_NAME
+find i18n -name '*.wxl' -print0 | xargs -0 sed -i "s|<String Id=\"ProductName\">[^<]*</String>|<String Id=\"ProductName\">${PRODUCT_NAME}</String>|g"
+find i18n -name '*.wxl' -print0 | xargs -0 sed -i "s|VSCodium|${PRODUCT_NAME}|g"
 
 # Adjust references to executable to match Neira.exe harvested File Id (NEIRA.EXE)
 sed -i 's|VSCODIUM\.EXE|NEIRA.EXE|g' vscodium.wxs
