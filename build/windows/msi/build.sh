@@ -66,37 +66,45 @@ sed -i "s|@@PRODUCT_NAME@@|${PRODUCT_NAME}|g" .\\vscodium.xsl
 find i18n -name '*.wxl' -print0 | xargs -0 sed -i "s|<String Id=\"ProductName\">[^<]*</String>|<String Id=\"ProductName\">${PRODUCT_NAME}</String>|g"
 find i18n -name '*.wxl' -print0 | xargs -0 sed -i "s|VSCodium|${PRODUCT_NAME}|g"
 
-# Adjust references to executable to match Neira.exe harvested File Id (NEIRA.EXE)
-sed -i 's|VSCODIUM\.EXE|NEIRA.EXE|g' vscodium.wxs
-# Replace deprecated Verb/@Target with TargetFile (keep same value)
-sed -i 's/ Target="/ TargetFile="/g' vscodium.wxs
-
-BuildSetupTranslationTransform() {
-	local CULTURE=${1}
-	local LANGID=${2}
-
-	LANGIDS="${LANGIDS},${LANGID}"
-
-	echo "Building setup translation for culture \"${CULTURE}\" with LangID \"${LANGID}\"..."
-
-	"${WIX}bin\\light.exe" vscodium.wixobj "Files-${OUTPUT_BASE_FILENAME}.wixobj" -ext WixUIExtension -ext WixUtilExtension -ext WixNetFxExtension -spdb -cc "${TEMP}\\vscodium-cab-cache\\${PLATFORM}" -reusecab -out "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.msi" -loc "i18n\\vscodium.${CULTURE}.wxl" -cultures:"${CULTURE}" -sice:ICE60 -sice:ICE69
-
-	local WILANGID_VBS="${PROGRAM_FILES_86}\\Windows Kits\\${WIN_SDK_MAJOR_VERSION}\\bin\\${WIN_SDK_FULL_VERSION}\\${PLATFORM}\\WiLangId.vbs"
-	if [[ -f "${WILANGID_VBS}" ]]; then
-	  cscript "${WILANGID_VBS}" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.msi" Product "${LANGID}"
-	  "${PROGRAM_FILES_86}\\Windows Kits\\${WIN_SDK_MAJOR_VERSION}\\bin\\${WIN_SDK_FULL_VERSION}\\x86\\msitran" -g "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.msi" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.msi" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.mst"
-	  cscript "${PROGRAM_FILES_86}\\Windows Kits\\${WIN_SDK_MAJOR_VERSION}\\bin\\${WIN_SDK_FULL_VERSION}\\${PLATFORM}\\wisubstg.vbs" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.msi" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.mst" "${LANGID}"
-	  cscript "${PROGRAM_FILES_86}\\Windows Kits\\${WIN_SDK_MAJOR_VERSION}\\bin\\${WIN_SDK_FULL_VERSION}\\${PLATFORM}\\wisubstg.vbs" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.msi"
-	  rm -f "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.msi"
-	  rm -f "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.mst"
-	else
-	  echo "WiLangId.vbs not found; skipping translation transform for ${CULTURE}" >&2
-	fi
-}
-
+# Build file list
 "${WIX}bin\\heat.exe" dir "${BINARY_DIR}" -out "Files-${OUTPUT_BASE_FILENAME}.wxs" -t vscodium.xsl -gg -sfrag -scom -sreg -srd -ke -cg "AppFiles" -var var.ManufacturerName -var var.AppName -var var.AppCodeName -var var.ProductVersion -var var.IconDir -var var.LicenseDir -var var.BinaryDir -dr APPLICATIONFOLDER -platform "${PLATFORM}"
+
+# Resolve Neira.exe File Id from heat output and rewrite Verb/Shortcut targets accordingly
+EXE_FILE_ID=$(awk '/Neira\.exe/ { if (match($0, /Id=\"([^\"]+)\"/, m)) { print m[1]; exit } }' "Files-${OUTPUT_BASE_FILENAME}.wxs" || true)
+if [[ -n "${EXE_FILE_ID}" ]]; then
+  # Replace Verb targets to use File Id (TargetFile)
+  sed -i -E "s/(<Verb[^>]*?)Target=\"(NEIRA|VSCODIUM)\.EXE\"/\\1TargetFile=\"${EXE_FILE_ID}\"/g" vscodium.wxs
+  sed -i -E "s/(<Verb[^>]*?)TargetFile=\"(NEIRA|VSCODIUM)\.EXE\"/\\1TargetFile=\"${EXE_FILE_ID}\"/g" vscodium.wxs
+  # Fix Shortcut to use Target with a File reference
+  sed -i -E "s/(<Shortcut[^>]*?)TargetFile=\"[^\"]+\"/\\1Target=\"[#${EXE_FILE_ID}]\"/g" vscodium.wxs
+fi
+
 "${WIX}bin\\candle.exe" -arch "${PLATFORM}" vscodium.wxs "Files-${OUTPUT_BASE_FILENAME}.wxs" -ext WixUIExtension -ext WixUtilExtension -ext WixNetFxExtension -dManufacturerName="Neira" -dAppCodeName="${PRODUCT_CODE}" -dAppName="${PRODUCT_NAME}" -dProductVersion="${RELEASE_VERSION%-insider}" -dProductId="${PRODUCT_ID}" -dBinaryDir="${BINARY_DIR}" -dIconDir="${ICON_DIR}" -dLicenseDir="${LICENSE_DIR}" -dSetupResourcesDir="${SETUP_RESOURCES_DIR}" -dCulture="${CULTURE}"
 "${WIX}bin\\light.exe" vscodium.wixobj "Files-${OUTPUT_BASE_FILENAME}.wixobj" -ext WixUIExtension -ext WixUtilExtension -ext WixNetFxExtension -spdb -cc "${TEMP}\\vscodium-cab-cache\\${PLATFORM}" -out "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.msi" -loc "i18n\\vscodium.${CULTURE}.wxl" -cultures:"${CULTURE}" -sice:ICE60 -sice:ICE69
+
+# Reintroduce localization transform builder
+BuildSetupTranslationTransform() {
+  local CULTURE=${1}
+  local LANGID=${2}
+
+  LANGIDS="${LANGIDS},${LANGID}"
+
+  echo "Building setup translation for culture \"${CULTURE}\" with LangID \"${LANGID}\"..."
+
+  "${WIX}bin\\light.exe" vscodium.wixobj "Files-${OUTPUT_BASE_FILENAME}.wixobj" -ext WixUIExtension -ext WixUtilExtension -ext WixNetFxExtension -spdb -cc "${TEMP}\\vscodium-cab-cache\\${PLATFORM}" -reusecab -out "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.msi" -loc "i18n\\vscodium.${CULTURE}.wxl" -cultures:"${CULTURE}" -sice:ICE60 -sice:ICE69
+
+  local WILANGID_VBS="${PROGRAM_FILES_86}\\Windows Kits\\${WIN_SDK_MAJOR_VERSION}\\bin\\${WIN_SDK_FULL_VERSION}\\${PLATFORM}\\WiLangId.vbs"
+  if [[ -f "${WILANGID_VBS}" ]]; then
+    cscript "${WILANGID_VBS}" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.msi" Product "${LANGID}"
+    "${PROGRAM_FILES_86}\\Windows Kits\\${WIN_SDK_MAJOR_VERSION}\\bin\\${WIN_SDK_FULL_VERSION}\\x86\\msitran" -g "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.msi" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.msi" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.mst"
+    cscript "${PROGRAM_FILES_86}\\Windows Kits\\${WIN_SDK_MAJOR_VERSION}\\bin\\${WIN_SDK_FULL_VERSION}\\${PLATFORM}\\wisubstg.vbs" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.msi" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.mst" "${LANGID}"
+    cscript "${PROGRAM_FILES_86}\\Windows Kits\\${WIN_SDK_MAJOR_VERSION}\\bin\\${WIN_SDK_FULL_VERSION}\\${PLATFORM}\\wisubstg.vbs" "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.msi"
+    rm -f "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.msi"
+    rm -f "${SETUP_RELEASE_DIR}\\${OUTPUT_BASE_FILENAME}.${CULTURE}.mst"
+  else
+    echo "WiLangId.vbs not found; skipping translation transform for ${CULTURE}" >&2
+  fi
+}
 
 BuildSetupTranslationTransform de-de 1031
 BuildSetupTranslationTransform es-es 3082
