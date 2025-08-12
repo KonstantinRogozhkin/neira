@@ -32,6 +32,28 @@ cp -f LICENSE vscode/LICENSE.txt
 
 cd vscode || { echo "'vscode' dir not found"; exit 1; }
 
+# Установка зависимостей (минимально как в Researcherry)
+export ELECTRON_SKIP_BINARY_DOWNLOAD=1
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+export VSCODE_SKIP_NODE_VERSION_CHECK=1
+
+mv .npmrc .npmrc.bak 2>/dev/null || true
+cp ../npmrc .npmrc
+
+for i in {1..3}; do
+  if npm ci; then
+    break
+  fi
+  echo "npm ci failed ($i), retrying..."
+  sleep $(( 5 * i ))
+  if [[ $i == 3 ]]; then
+    echo "Npm install failed too many times" >&2
+    exit 1
+  fi
+done
+
+mv .npmrc.bak .npmrc 2>/dev/null || true
+
 # Простая функция setpath через jq
 setpath() {
   local jsonTmp
@@ -55,6 +77,26 @@ else
   setpath "product" "applicationName" "neira"
   setpath "product" "linuxIconName" "neira"
   setpath "product" "win32ShellNameShort" "Neira"
+fi
+
+# Заменяем логотип на welcome-странице на Neira
+# В CSS используется '../../../../browser/media/code-icon.svg' — заменим его на наш логотип
+if [[ -f ../icons/Neira/logo_neira_white_full.svg ]]; then
+  mkdir -p src/vs/workbench/browser/media
+  cp -f src/vs/workbench/browser/media/code-icon.svg src/vs/workbench/browser/media/code-icon.svg.bak 2>/dev/null || true
+  cp -f ../icons/Neira/logo_neira_white_full.svg src/vs/workbench/browser/media/code-icon.svg
+fi
+
+# Предустанавливаем расширение из VSIX как built-in
+NEIRA_VSIX_ABS="$(cd .. && pwd)/dev/neira-coder-3.31.21.vsix"
+if [[ -f "${NEIRA_VSIX_ABS}" ]]; then
+  mkdir -p .build/builtInExtensions/neira-coder
+  # Скопируем vsix внутрь папки расширения
+  cp -f "${NEIRA_VSIX_ABS}" .build/builtInExtensions/neira-coder/neira-coder.vsix
+  # Вычислим sha256
+  NEIRA_VSIX_SHA=$(node -e "const fs=require('fs'),crypto=require('crypto'); const b=fs.readFileSync('.build/builtInExtensions/neira-coder/neira-coder.vsix'); console.log(crypto.createHash('sha256').update(b).digest('hex'));")
+  # Пропишем в product.builtInExtensions запись с vsix и sha256
+  jq --arg sha "$NEIRA_VSIX_SHA" '.builtInExtensions = (.builtInExtensions // []) | .builtInExtensions += [{"name":"neira-coder","vsix":".build/builtInExtensions/neira-coder/neira-coder.vsix","sha256":$sha}]' product.json > product.json.tmp && mv product.json.tmp product.json
 fi
 
 echo "=== DEBUG: Финальный product.json ==="
