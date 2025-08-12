@@ -1,0 +1,57 @@
+---
+title: Neira: как собрать приложение
+---
+
+# Neira: как собрать приложение
+
+Ниже — минимальный гайд по сборке Neira и где лежат основные скрипты.
+
+- Основные скрипты:
+  - Подготовка (простая): [prepare-neira-simple.sh](mdc:prepare-neira-simple.sh)
+  - Главный оркестратор: [build-neira-main.sh](mdc:build-neira-main.sh)
+  - Точка входа для сборки: [dev/build-neira.sh](mdc:dev/build-neira.sh)
+  - Генерация иконок (Windows/Linux/Server): [icons/resize-neira.ps1](mdc:icons/resize-neira.ps1)
+  - Встраивание иконки панели в SVG: [tools/embed_panel_svg.ps1](mdc:tools/embed_panel_svg.ps1)
+  - MSI-инсталлятор: [build/windows/msi/build.sh](mdc:build/windows/msi/build.sh)
+
+- Важные директории/файлы ресурсов:
+  - Иконки Neira: [icons/Neira](mdc:icons/Neira)
+  - Ресурсы для stable: [src/stable/resources](mdc:src/stable/resources)
+  - Ресурсы для insider: [src/insider/resources](mdc:src/insider/resources)
+  - Готовые сборки (Win): `VSCode-win32-<arch>` и MSI в [build/windows/msi/releasedir](mdc:build/windows/msi/releasedir)
+
+## Быстрый старт (Windows)
+Предпочтительно запускать скрипты через Git Bash.
+
+1) Подготовить иконки (по желанию):
+```powershell
+powershell -ExecutionPolicy Bypass -File icons/resize-neira.ps1
+```
+
+2) Собрать приложение Neira:
+```powershell
+"C:\\Program Files\\Git\\bin\\bash.exe" -lc 'set -e; export VSCODE_ARCH=x64; ./dev/build-neira.sh'
+```
+Выход: папка `VSCode-win32-x64/` с `Neira.exe`.
+
+3) Собрать MSI (необязательно):
+```powershell
+"C:\\Program Files\\Git\\bin\\bash.exe" -lc 'set -e; export VSCODE_ARCH=x64; cd build/windows/msi && ./build.sh'
+```
+Выход: `build/windows/msi/releasedir/Neira-x64-<version>.msi`.
+
+## Переменные окружения
+- `VSCODE_ARCH`: `x64` (по умолчанию), `ia32`, `arm64` — влияет на пути и имена артефактов
+- `VSCODE_QUALITY`: `stable` (по умолчанию) или `insider` — влияет на ресурсы и имя продукта
+- Версия берётся из [dev/build.env](mdc:dev/build.env) и прокидывается в сборку автоматически
+
+## Зависимости (Windows)
+- Git for Windows (Git Bash)
+- Node.js LTS (для `npm ci` во `vscode/`)
+- WiX Toolset 3.14+ (только для MSI)
+- (Опционально) ImageMagick или .NET System.Drawing — для подготовки иконок (скрипт уже использует System.Drawing)
+
+## FAQ
+- Ошибка `tsc not found` — выполните подготовку: скрипт [prepare-neira-simple.sh](mdc:prepare-neira-simple.sh) делает `npm ci` внутри `vscode/`.
+- Иконка EXE не обновилась — Windows может кешировать. Очистите кеш иконок или увеличьте версию/переименуйте exe; в сборке иконка вшивается через `rcedit`.
+- MSI без локализаций — основной `.msi` собирается всегда; языковые трансформы выполняются, только если в системе есть `WiLangId.vbs` (Windows SDK).

@@ -1,0 +1,35 @@
+# Neira MSI: сборка и нюансы
+
+Этот файл применяется к файлам в `build/windows/msi/**` и описывает, как собирать MSI и как устроены фиксы.
+
+## Предпосылки
+- Требуется WiX Toolset 3.14+
+- Рекомендуется Git Bash для запуска `build.sh`
+- (Опционально) Windows SDK (для `WiLangId.vbs` и языковых трансформов)
+
+## Как собрать MSI
+```powershell
+"C:\\Program Files\\Git\\bin\\bash.exe" -lc 'set -e; export VSCODE_ARCH=x64; cd build/windows/msi && ./build.sh'
+```
+- Версия берётся из [dev/build.env](mdc:dev/build.env) (`RELEASE_VERSION`)
+- Итоговый файл: [build/windows/msi/releasedir](mdc:build/windows/msi/releasedir)/`Neira-<arch>-<version>.msi`
+
+## Что делает build.sh
+- Задает брендинг Neira (`PRODUCT_NAME`, `PRODUCT_CODE`), ресурсы `ICON_DIR`, `SETUP_RESOURCES_DIR`
+- Запускает `heat` для генерации `Files-*.wxs` из каталога `VSCode-win32-<arch>`
+- Автоматически находит `File Id` для `Neira.exe` в `Files-*.wxs` и переписывает в `vscodium.wxs`:
+  - у `Verb` — `TargetFile="<FileId>"`
+  - у `Shortcut` — `Target="[#<FileId>]"`
+- Компилирует/линкует через `candle`/`light`, собирая `.msi`
+- Если доступен `WiLangId.vbs`, создаёт языковые трансформы и добавляет их в пакет
+
+## Частые ошибки и решения
+- LGHT0094 Unresolved reference to symbol 'File:VSCODIUM.EXE' — решено авто-подстановкой реального `FileId` для EXE
+- CNDL0004 Unexpected attribute 'TargetFile' у `Shortcut` — исправлено: для `Shortcut` используется `Target="[#FileId]"`
+- CNDL0006 Product/@Version пустая — `build.sh` подхватывает версию из [dev/build.env](mdc:dev/build.env)
+- HEAT0001 startIndex... (пустой путь) — убедитесь, что задан `VSCODE_ARCH` (по умолчанию `x64`)
+
+## Советы
+- Не редактируйте вручную `Target`/`TargetFile` в `vscodium.wxs` — скрипт переписывает их корректно сам
+- Для смены ресурсов MSI-UI используйте файлы из `resources/stable|insider` и `ICON_DIR`
+- Основная иконка EXE встраивается на этапе упаковки приложения (см. [build-neira-main.sh](mdc:build-neira-main.sh)); MSI использует уже готовый `Neira.exe`
